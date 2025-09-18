@@ -38,6 +38,7 @@ class HalsteadParser:
 
     def _extract_operators(self, code):
         code = self._remove_comments(code)
+        code_no_strings = re.sub(r'(["\'])(?:(?=(\\?))\2.)*?\1', '', code)
 
         php_operators = [
             '+', '-', '*', '/', '%', '**', '++', '--',
@@ -61,15 +62,18 @@ class HalsteadParser:
             'fetch_assoc', 'getUserById', 'getMessage', 'getUsersByRole', 'addUser'
         ]
 
+        # Сначала обрабатываем составные операторы
+        self._extract_composite_operators(code_no_strings)
+        
+        # Затем простые операторы (исключаем составные)
         operator_patterns = [
             r'\+\+', r'--', r'\*\*', r'\+=', r'-=', r'\*=', r'/=', r'%=', r'\.=',
             r'===', r'!==', r'<=>', r'&&', r'\|\|', r'<<', r'>>', r'->', r'::', r'\?\?',
             r'<=', r'>=', r'==', r'!=', r'<>',
-            r'if\s*\(', r'elseif\s*\(', r'else\b', r'switch\s*\(',
-            r'case\b', r'default\b', r'while\s*\(', r'do\b',
+            r'while\s*\(', r'do\b',
             r'for\s*\(', r'foreach\s*\(', r'break\b', r'continue\b',
             r'function\b', r'return\b', r'class\b', r'interface\b', r'trait\b',
-            r'try\b', r'catch\s*\(', r'finally\b', r'throw\b',
+            r'throw\b',
             r'echo\b', r'print\b', r'isset\s*\(', r'empty\s*\(', r'unset\s*\(',
             r'\+', r'-', r'\*', r'/', r'%', r'=', r'<', r'>',
             r'&', r'\|', r'\^', r'~', r'!', r'\.', r'\?', r':', r'@',
@@ -77,13 +81,71 @@ class HalsteadParser:
         ]
 
         for pattern in operator_patterns:
-            matches = re.findall(pattern, code, re.IGNORECASE)
+            matches = re.findall(pattern, code_no_strings, re.IGNORECASE)
             for match in matches:
                 operator = match.lower() if match.strip().isalpha() else match
                 self.operators_dict[operator] = self.operators_dict.get(operator, 0) + 1
 
+        # Считаем только закрытые пары скобок как один оператор
+        # Одиночные скобки считаем отдельно
+        open_parens = code_no_strings.count('(')
+        close_parens = code_no_strings.count(')')
+        open_braces = code_no_strings.count('{')
+        close_braces = code_no_strings.count('}')
+        open_brackets = code_no_strings.count('[')
+        close_brackets = code_no_strings.count(']')
+        
+        # Закрытые пары
+        pairs = min(open_parens, close_parens)
+        if pairs > 0:
+            self.operators_dict['()'] = self.operators_dict.get('()', 0) + pairs
+        
+        pairs = min(open_braces, close_braces)
+        if pairs > 0:
+            self.operators_dict['{}'] = self.operators_dict.get('{}', 0) + pairs
+            
+        pairs = min(open_brackets, close_brackets)
+        if pairs > 0:
+            self.operators_dict['[]'] = self.operators_dict.get('[]', 0) + pairs
+        
+        # Одиночные скобки (не закрытые)
+        if open_parens > close_parens:
+            self.operators_dict['('] = self.operators_dict.get('(', 0) + (open_parens - close_parens)
+        if close_parens > open_parens:
+            self.operators_dict[')'] = self.operators_dict.get(')', 0) + (close_parens - open_parens)
+            
+        if open_braces > close_braces:
+            self.operators_dict['{'] = self.operators_dict.get('{', 0) + (open_braces - close_braces)
+        if close_braces > open_braces:
+            self.operators_dict['}'] = self.operators_dict.get('}', 0) + (close_braces - open_braces)
+            
+        if open_brackets > close_brackets:
+            self.operators_dict['['] = self.operators_dict.get('[', 0) + (open_brackets - close_brackets)
+        if close_brackets > open_brackets:
+            self.operators_dict[']'] = self.operators_dict.get(']', 0) + (close_brackets - open_brackets)
+
         self.eta1 = len(self.operators_dict)
         self.N1 = sum(self.operators_dict.values())
+
+    def _extract_composite_operators(self, code):
+        """Извлекает составные операторы как единые конструкции"""
+        # if-elseif-else конструкции
+        if_else_pattern = r'if\s*\([^)]*\)\s*\{[^{}]*(?:\{[^{}]*\}[^{}]*)*\}(?:\s*elseif\s*\([^)]*\)\s*\{[^{}]*(?:\{[^{}]*\}[^{}]*)*\})*(?:\s*else\s*\{[^{}]*(?:\{[^{}]*\}[^{}]*)*\})?'
+        if_else_matches = re.findall(if_else_pattern, code, re.IGNORECASE | re.DOTALL)
+        for match in if_else_matches:
+            self.operators_dict['if-else'] = self.operators_dict.get('if-else', 0) + 1
+        
+        # try-catch-finally конструкции
+        try_catch_pattern = r'try\s*\{[^{}]*(?:\{[^{}]*\}[^{}]*)*\}(?:\s*catch\s*\([^)]*\)\s*\{[^{}]*(?:\{[^{}]*\}[^{}]*)*\})*(?:\s*finally\s*\{[^{}]*(?:\{[^{}]*\}[^{}]*)*\})?'
+        try_catch_matches = re.findall(try_catch_pattern, code, re.IGNORECASE | re.DOTALL)
+        for match in try_catch_matches:
+            self.operators_dict['try-catch'] = self.operators_dict.get('try-catch', 0) + 1
+        
+        # switch-case-default конструкции
+        switch_case_pattern = r'switch\s*\([^)]*\)\s*\{[^{}]*(?:\{[^{}]*\}[^{}]*)*\}'
+        switch_case_matches = re.findall(switch_case_pattern, code, re.IGNORECASE | re.DOTALL)
+        for match in switch_case_matches:
+            self.operators_dict['switch-case'] = self.operators_dict.get('switch-case', 0) + 1
 
     def _extract_operands(self, code):
         code = self._remove_comments(code)
@@ -97,14 +159,41 @@ class HalsteadParser:
         for num in numbers:
             self.operands_dict[num] = self.operands_dict.get(num, 0) + 1
 
-        strings = re.findall(r'(["\'])(?:(?=(\\?))\2.)*?\1', code)
-        for string in strings:
-            string_content = string[0]
-            self.operands_dict[f'"{string_content}"'] = self.operands_dict.get(f'"{string_content}"', 0) + 1
+        for m in re.finditer(r'(["\'])(?:(?=(\\?))\2.)*?\1', code):
+            literal = m.group(0)
+            # Извлекаем содержимое между кавычками и нормализуем
+            content = literal[1:-1]  # убираем первую и последнюю кавычку
+            content = content.strip()  # убираем пробелы в начале и конце
+            # Добавляем как операнд с нормализованным содержимым
+            self.operands_dict[content] = self.operands_dict.get(content, 0) + 1
 
         constants = re.findall(r'\b(true|false|null)\b', code_no_strings, re.IGNORECASE)
         for const in constants:
             self.operands_dict[const.lower()] = self.operands_dict.get(const.lower(), 0) + 1
+
+        # Имена функций, классов, методов - это операторы
+        # Исключаем зарезервированные слова PHP
+        php_keywords = {
+            'if', 'else', 'elseif', 'switch', 'case', 'default', 'while', 'do', 'for', 'foreach',
+            'break', 'continue', 'function', 'return', 'class', 'interface', 'trait', 'try', 'catch',
+            'finally', 'throw', 'echo', 'print', 'isset', 'empty', 'unset', 'private', 'public',
+            'protected', 'static', 'abstract', 'final', 'const', 'var', 'global', 'include',
+            'require', 'include_once', 'require_once', 'new', 'clone', 'instanceof', 'and', 'or',
+            'xor', 'as', 'foreach', 'endfor', 'endif', 'endwhile', 'endswitch', 'endforeach',
+            'declare', 'enddeclare', 'list', 'array', 'die', 'exit', 'eval', 'isset', 'unset',
+            'empty', 'print', 'echo', 'return', 'yield', 'yield from', 'use', 'namespace',
+            'extends', 'implements', 'insteadof', 'trait', 'as', 'public', 'protected', 'private',
+            'static', 'abstract', 'final', 'const', 'readonly', 'var', 'global', 'static',
+            'include', 'require', 'include_once', 'require_once', 'goto', 'fn', 'match',
+            'enum', 'readonly', 'never', 'mixed', 'union', 'intersection', 'true', 'false', 'null'
+        }
+        
+        # Находим все идентификаторы (имена функций, классов, методов) как операторы
+        identifiers = re.findall(r'\b[a-zA-Z_][a-zA-Z0-9_]*\b', code_no_strings)
+        for identifier in identifiers:
+            # Пропускаем зарезервированные слова PHP
+            if identifier.lower() not in php_keywords:
+                self.operators_dict[identifier] = self.operators_dict.get(identifier, 0) + 1
 
         self.eta2 = len(self.operands_dict)
         self.N2 = sum(self.operands_dict.values())

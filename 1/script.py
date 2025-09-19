@@ -23,6 +23,9 @@ class HalsteadParser:
         self._reset_metrics()
         self._extract_operators(code)
         self._extract_operands(code)
+        # Подсчитываем финальные метрики операторов после извлечения всех операторов
+        self.eta1 = len(self.operators_dict)
+        self.N1 = sum(self.operators_dict.values())
         self._calculate_metrics()
 
     def _reset_metrics(self):
@@ -67,9 +70,6 @@ class HalsteadParser:
 
         # Обрабатываем скобки как составные конструкции
         self._extract_bracket_constructs(code_no_strings)
-
-        self.eta1 = len(self.operators_dict)
-        self.N1 = sum(self.operators_dict.values())
 
     def _extract_composite_operators(self, code):
         """Извлекает составные операторы как единые конструкции"""

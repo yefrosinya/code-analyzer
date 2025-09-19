@@ -23,7 +23,6 @@ class HalsteadParser:
         self._reset_metrics()
         self._extract_operators(code)
         self._extract_operands(code)
-        # Подсчитываем финальные метрики операторов после извлечения всех операторов
         self.eta1 = len(self.operators_dict)
         self.N1 = sum(self.operators_dict.values())
         self._calculate_metrics()
@@ -65,47 +64,36 @@ class HalsteadParser:
             'fetch_assoc', 'getUserById', 'getMessage', 'getUsersByRole', 'addUser'
         ]
 
-        # Обрабатываем составные операторы и отдельные операторы
         self._extract_composite_operators(code_no_strings)
 
-        # Обрабатываем скобки как составные конструкции
         self._extract_bracket_constructs(code_no_strings)
 
     def _extract_composite_operators(self, code):
-        """Извлекает составные операторы как единые конструкции"""
-        # Сначала считаем составные конструкции и помечаем их как обработанные
         processed_ranges = []
-        
-        # if-elseif-else конструкции (только ключевые слова)
+
         if_else_pattern = r'\bif\b|\belseif\b|\belse\b'
         for match in re.finditer(if_else_pattern, code, re.IGNORECASE):
             self.operators_dict['if-else'] = self.operators_dict.get('if-else', 0) + 1
             processed_ranges.append((match.start(), match.end()))
-        
-        # try-catch-finally конструкции
+
         try_catch_pattern = r'try\s*\{[^{}]*(?:\{[^{}]*\}[^{}]*)*\}(?:\s*catch\s*\([^)]*\)\s*\{[^{}]*(?:\{[^{}]*\}[^{}]*)*\})*(?:\s*finally\s*\{[^{}]*(?:\{[^{}]*\}[^{}]*)*\})?'
         for match in re.finditer(try_catch_pattern, code, re.IGNORECASE | re.DOTALL):
             self.operators_dict['try-catch'] = self.operators_dict.get('try-catch', 0) + 1
             processed_ranges.append((match.start(), match.end()))
-        
-        # switch-case-default конструкции
+
         switch_case_pattern = r'switch\s*\([^)]*\)\s*\{[^{}]*(?:\{[^{}]*\}[^{}]*)*\}'
         for match in re.finditer(switch_case_pattern, code, re.IGNORECASE | re.DOTALL):
             self.operators_dict['switch-case'] = self.operators_dict.get('switch-case', 0) + 1
             processed_ranges.append((match.start(), match.end()))
-        
-        # Теперь считаем отдельные операторы, исключая уже обработанные диапазоны
+
         self._extract_individual_operators(code, processed_ranges)
 
     def _extract_individual_operators(self, code, processed_ranges):
-        """Извлекает отдельные операторы, исключая уже обработанные составные конструкции"""
-        # Создаем список всех обработанных позиций
         all_processed_positions = set()
         for start, end in processed_ranges:
             for pos in range(start, end):
                 all_processed_positions.add(pos)
-        
-        # Сначала обрабатываем составные операторы (длинные идут первыми)
+
         composite_operators = [
             (r'===', '==='),
             (r'!==', '!=='),
@@ -133,11 +121,9 @@ class HalsteadParser:
             (r'!=', '!='),
             (r'<>', '<>'),
         ]
-        
-        # Обрабатываем составные операторы
+
         for pattern, operator in composite_operators:
             for match in re.finditer(pattern, code, re.IGNORECASE):
-                # Проверяем, не попадает ли этот оператор в уже обработанный диапазон
                 is_processed = False
                 for pos in range(match.start(), match.end()):
                     if pos in all_processed_positions:
@@ -146,11 +132,9 @@ class HalsteadParser:
                 
                 if not is_processed:
                     self.operators_dict[operator] = self.operators_dict.get(operator, 0) + 1
-                    # Добавляем позиции этого оператора в обработанные
                     for pos in range(match.start(), match.end()):
                         all_processed_positions.add(pos)
-        
-        # Теперь обрабатываем простые операторы, исключая те, что уже обработаны как составные
+
         simple_operators = [
             (r'if\s*\(', 'if'),
             (r'elseif\s*\(', 'elseif'),
@@ -201,7 +185,6 @@ class HalsteadParser:
 
         for pattern, operator in simple_operators:
             for match in re.finditer(pattern, code, re.IGNORECASE):
-                # Проверяем, не попадает ли этот оператор в уже обработанный диапазон
                 is_processed = False
                 for pos in range(match.start(), match.end()):
                     if pos in all_processed_positions:
@@ -212,61 +195,47 @@ class HalsteadParser:
                     self.operators_dict[operator] = self.operators_dict.get(operator, 0) + 1
 
     def _extract_bracket_constructs(self, code):
-        """Извлекает скобочные конструкции как единые операторы"""
-        # Сначала считаем все скобки по отдельности
         open_parens = code.count('(')
         close_parens = code.count(')')
         open_braces = code.count('{')
         close_braces = code.count('}')
         open_brackets = code.count('[')
         close_brackets = code.count(']')
-        
-        # Круглые скобки ()
+
         if open_parens == close_parens:
-            # Количество совпадает - все пары
             if open_parens > 0:
                 self.operators_dict['()'] = self.operators_dict.get('()', 0) + open_parens
         else:
-            # Количество различается - максимальное количество пар + одиночные
             pairs = min(open_parens, close_parens)
             if pairs > 0:
                 self.operators_dict['()'] = self.operators_dict.get('()', 0) + pairs
-            
-            # Одиночные скобки
+
             if open_parens > close_parens:
                 self.operators_dict['('] = self.operators_dict.get('(', 0) + (open_parens - close_parens)
             if close_parens > open_parens:
                 self.operators_dict[')'] = self.operators_dict.get(')', 0) + (close_parens - open_parens)
-        
-        # Фигурные скобки {}
+
         if open_braces == close_braces:
-            # Количество совпадает - все пары
             if open_braces > 0:
                 self.operators_dict['{}'] = self.operators_dict.get('{}', 0) + open_braces
         else:
-            # Количество различается - максимальное количество пар + одиночные
             pairs = min(open_braces, close_braces)
             if pairs > 0:
                 self.operators_dict['{}'] = self.operators_dict.get('{}', 0) + pairs
-            
-            # Одиночные скобки
+
             if open_braces > close_braces:
                 self.operators_dict['{'] = self.operators_dict.get('{', 0) + (open_braces - close_braces)
             if close_braces > open_braces:
                 self.operators_dict['}'] = self.operators_dict.get('}', 0) + (close_braces - open_braces)
-        
-        # Квадратные скобки []
+
         if open_brackets == close_brackets:
-            # Количество совпадает - все пары
             if open_brackets > 0:
                 self.operators_dict['[]'] = self.operators_dict.get('[]', 0) + open_brackets
         else:
-            # Количество различается - максимальное количество пар + одиночные
             pairs = min(open_brackets, close_brackets)
             if pairs > 0:
                 self.operators_dict['[]'] = self.operators_dict.get('[]', 0) + pairs
-            
-            # Одиночные скобки
+
             if open_brackets > close_brackets:
                 self.operators_dict['['] = self.operators_dict.get('[', 0) + (open_brackets - close_brackets)
             if close_brackets > open_brackets:
@@ -286,18 +255,14 @@ class HalsteadParser:
 
         for m in re.finditer(r'(["\'])(?:(?=(\\?))\2.)*?\1', code):
             literal = m.group(0)
-            # Извлекаем содержимое между кавычками и нормализуем
-            content = literal[1:-1]  # убираем первую и последнюю кавычку
-            content = content.strip()  # убираем пробелы в начале и конце
-            # Добавляем как операнд с нормализованным содержимым
+            content = literal[1:-1]
+            content = content.strip()
             self.operands_dict[content] = self.operands_dict.get(content, 0) + 1
 
         constants = re.findall(r'\b(true|false|null)\b', code_no_strings, re.IGNORECASE)
         for const in constants:
             self.operands_dict[const.lower()] = self.operands_dict.get(const.lower(), 0) + 1
 
-        # Имена функций, классов, методов - это операторы
-        # Исключаем зарезервированные слова PHP
         php_keywords = {
             'if', 'else', 'elseif', 'switch', 'case', 'default', 'while', 'do', 'for', 'foreach',
             'break', 'continue', 'function', 'return', 'class', 'interface', 'trait', 'try', 'catch',
@@ -312,15 +277,12 @@ class HalsteadParser:
             'include', 'require', 'include_once', 'require_once', 'goto', 'fn', 'match',
             'enum', 'readonly', 'never', 'mixed', 'union', 'intersection', 'true', 'false', 'null'
         }
-        
-        # Находим только имена функций, классов, методов как операторы
-        # Ищем вызовы функций: function_name( или function_name->method(
+
         function_calls = re.findall(r'\b([a-zA-Z_][a-zA-Z0-9_]*)\s*\(', code_no_strings)
         for func_name in function_calls:
             if func_name.lower() not in php_keywords:
                 self.operators_dict[func_name] = self.operators_dict.get(func_name, 0) + 1
-        
-        # Ищем имена классов: new ClassName или ClassName::
+
         class_names = re.findall(r'\bnew\s+([a-zA-Z_][a-zA-Z0-9_]*)\b', code_no_strings)
         for class_name in class_names:
             if class_name.lower() not in php_keywords:
@@ -391,6 +353,7 @@ class HalsteadAnalyzerApp:
         menubar.add_cascade(label="Файл", menu=file_menu)
         file_menu.add_command(label="Открыть файл", command=self.open_file)
         file_menu.add_command(label="Сохранить как", command=self.save_file)
+        file_menu.add_command(label="Экспортировать результаты…", command=self.export_results)
         file_menu.add_separator()
         file_menu.add_command(label="Выход", command=self.root.quit)
 
@@ -403,12 +366,12 @@ class HalsteadAnalyzerApp:
         main_frame.rowconfigure(1, weight=1)
         main_frame.rowconfigure(3, weight=1)
 
-        # Кнопки для работы с файлами
         button_frame = ttk.Frame(main_frame)
         button_frame.grid(row=0, column=0, columnspan=2, sticky=tk.W, pady=(0, 5))
 
         ttk.Button(button_frame, text="Открыть файл", command=self.open_file).pack(side=tk.LEFT, padx=(0, 5))
         ttk.Button(button_frame, text="Сохранить", command=self.save_file).pack(side=tk.LEFT, padx=(0, 5))
+        ttk.Button(button_frame, text="Экспорт результатов", command=self.export_results).pack(side=tk.LEFT, padx=(0, 5))
         ttk.Button(button_frame, text="Очистить", command=self.clear_text).pack(side=tk.LEFT)
 
         ttk.Label(main_frame, text="Введите PHP код для анализа:").grid(row=1, column=0, columnspan=2, sticky=tk.W,
@@ -417,9 +380,8 @@ class HalsteadAnalyzerApp:
         self.code_text = scrolledtext.ScrolledText(main_frame, width=80, height=15, wrap=tk.WORD)
         self.code_text.grid(row=2, column=0, columnspan=2, sticky=(tk.W, tk.E, tk.N, tk.S), pady=(0, 10))
 
-        # Разрешаем вставку текста
         self.code_text.bind('<Control-v>', self.paste_text)
-        self.code_text.bind('<Button-3>', self.show_context_menu)  # Правый клик для контекстного меню
+        self.code_text.bind('<Button-3>', self.show_context_menu)
 
         self.analyze_button = ttk.Button(main_frame, text="Анализировать код", command=self.analyze_code)
         self.analyze_button.grid(row=3, column=0, columnspan=2, pady=(0, 10))
@@ -529,6 +491,90 @@ echo "Факториал числа $number равен: " . $result;
         except Exception as e:
             messagebox.showerror("Ошибка", f"Произошла ошибка при анализе кода: {str(e)}")
 
+
+    def export_results(self):
+        try:
+            code = self.code_text.get("1.0", tk.END)
+            if not code.strip():
+                messagebox.showwarning("Предупреждение", "Пожалуйста, введите PHP код для анализа перед экспортом.")
+                return
+
+            self.parser.parse_code(code)
+
+            file_path = filedialog.asksaveasfilename(
+                title="Экспорт результатов",
+                defaultextension=".csv",
+                filetypes=[
+                    ("CSV file", "*.csv"),
+                    ("Text file", "*.txt"),
+                    ("All files", "*.*")
+                ]
+            )
+
+            if not file_path:
+                return
+
+            operators = list(self.parser.operators_dict.items())
+            operands = list(self.parser.operands_dict.items())
+            metrics = {
+                "eta1": self.parser.eta1,
+                "N1": self.parser.N1,
+                "eta2": self.parser.eta2,
+                "N2": self.parser.N2,
+                "eta": self.parser.eta,
+                "N": self.parser.N,
+                "V": round(self.parser.V, 2),
+            }
+
+            if file_path.lower().endswith(".csv"):
+                self._export_to_csv(file_path, operators, operands, metrics)
+            else:
+                self._export_to_txt(file_path, operators, operands, metrics)
+
+            messagebox.showinfo("Успех", f"Результаты успешно экспортированы в файл:\n{file_path}")
+        except Exception as e:
+            messagebox.showerror("Ошибка", f"Не удалось экспортировать результаты: {str(e)}")
+
+    def _export_to_csv(self, file_path, operators, operands, metrics):
+        import csv
+        with open(file_path, "w", encoding="utf-8", newline="") as f:
+            writer = csv.writer(f)
+            writer.writerow(["section", "name", "count"])
+            for name, count in operators:
+                writer.writerow(["operator", name, count])
+            for name, count in operands:
+                writer.writerow(["operand", name, count])
+            writer.writerow(["metrics", "eta1", metrics["eta1"]])
+            writer.writerow(["metrics", "N1", metrics["N1"]])
+            writer.writerow(["metrics", "eta2", metrics["eta2"]])
+            writer.writerow(["metrics", "N2", metrics["N2"]])
+            writer.writerow(["metrics", "eta", metrics["eta"]])
+            writer.writerow(["metrics", "N", metrics["N"]])
+            writer.writerow(["metrics", "V", metrics["V"]])
+
+    def _export_to_txt(self, file_path, operators, operands, metrics):
+        lines = []
+        lines.append("ОПЕРАТОРЫ (j | Оператор | fij)")
+        lines.append("-" * 40)
+        for j, (op, cnt) in enumerate(operators, 1):
+            lines.append(f"{j} | {op} | {cnt}")
+        lines.append("")
+        lines.append(f"η1 = {metrics['eta1']} | N1 = {metrics['N1']}")
+        lines.append("")
+        lines.append("ОПЕРАНДЫ (i | Операнд | fzi)")
+        lines.append("-" * 40)
+        for i, (opnd, cnt) in enumerate(operands, 1):
+            lines.append(f"{i} | {opnd} | {cnt}")
+        lines.append("")
+        lines.append(f"η2 = {metrics['eta2']} | N2 = {metrics['N2']}")
+        lines.append("")
+        lines.append("Расширенные метрики Холстеда:")
+        lines.append(f"Словарь программы (η): {metrics['eta']}")
+        lines.append(f"Длина программы (N): {metrics['N']}")
+        lines.append(f"Объем программы (V): {metrics['V']}")
+
+        with open(file_path, "w", encoding="utf-8") as f:
+            f.write("\n".join(lines))
 
 def main():
     root = tk.Tk()

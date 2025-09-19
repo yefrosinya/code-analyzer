@@ -1,10 +1,4 @@
-#!/usr/bin/env python3
-# -*- coding: utf-8 -*-
-
-from script import HalsteadParser
-
-# Оригинальный PHP код
-test_code = """<?php
+<?php
 class UserManager {
     private $db;
     private $users = [] ;
@@ -94,60 +88,4 @@ try {
 } catch (Exception $e) {
     echo "Error: " . $e->getMessage() . "\n";
 }
-?>"""
-
-def main():
-    parser = HalsteadParser()
-    parser.parse_code(test_code)
-    
-    print("=== ФИНАЛЬНЫЙ ТЕСТ ===")
-    print()
-    
-    # Показываем проблемные операторы
-    print("ПРОВЕРКА ПРОБЛЕМНЫХ ОПЕРАТОРОВ:")
-    arrow_count = parser.operators_dict.get('->', 0)
-    equals_count = parser.operators_dict.get('==', 0)
-    or_count = parser.operators_dict.get('||', 0)
-    arrow_equals_count = parser.operators_dict.get('=>', 0)
-    
-    print(f"Оператор '->': {arrow_count} раз")
-    print(f"Оператор '==': {equals_count} раз")
-    print(f"Оператор '||': {or_count} раз")
-    print(f"Оператор '=>': {arrow_equals_count} раз")
-    
-    # Проверяем, есть ли отдельные символы
-    single_arrow = parser.operators_dict.get('-', 0)
-    single_equals = parser.operators_dict.get('=', 0)
-    single_or = parser.operators_dict.get('|', 0)
-    single_greater = parser.operators_dict.get('>', 0)
-    
-    print(f"Отдельный символ '-': {single_arrow} раз")
-    print(f"Отдельный символ '=': {single_equals} раз")
-    print(f"Отдельный символ '|': {single_or} раз")
-    print(f"Отдельный символ '>': {single_greater} раз")
-    
-    print()
-    print("=== РЕЗУЛЬТАТ ===")
-    
-    # Проверяем результаты
-    success = True
-    if single_arrow > 0:
-        print("❌ ОШИБКА: Отдельные символы '-' не должны считаться!")
-        success = False
-    if single_or > 0:
-        print("❌ ОШИБКА: Отдельные символы '|' не должны считаться!")
-        success = False
-    if single_greater > 0:
-        print("❌ ОШИБКА: Отдельные символы '>' не должны считаться!")
-        success = False
-    
-    if success:
-        print("✅ УСПЕХ: Все операторы обрабатываются правильно!")
-        print(f"   - '->': {arrow_count} раз (только целиком)")
-        print(f"   - '==': {equals_count} раз (правильно, в коде нет)")
-        print(f"   - '||': {or_count} раз (только целиком)")
-        print(f"   - '=>': {arrow_equals_count} раз (только целиком)")
-        print(f"   - Отдельные символы: 0 раз")
-
-if __name__ == "__main__":
-    main()
+?>

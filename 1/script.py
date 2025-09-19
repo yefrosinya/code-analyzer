@@ -76,9 +76,9 @@ class HalsteadParser:
         # Сначала считаем составные конструкции и помечаем их как обработанные
         processed_ranges = []
         
-        # if-elseif-else конструкции
-        if_else_pattern = r'if\s*\([^)]*\)\s*\{[^{}]*(?:\{[^{}]*\}[^{}]*)*\}(?:\s*elseif\s*\([^)]*\)\s*\{[^{}]*(?:\{[^{}]*\}[^{}]*)*\})*(?:\s*else\s*\{[^{}]*(?:\{[^{}]*\}[^{}]*)*\})?'
-        for match in re.finditer(if_else_pattern, code, re.IGNORECASE | re.DOTALL):
+        # if-elseif-else конструкции (только ключевые слова)
+        if_else_pattern = r'\bif\b|\belseif\b|\belse\b'
+        for match in re.finditer(if_else_pattern, code, re.IGNORECASE):
             self.operators_dict['if-else'] = self.operators_dict.get('if-else', 0) + 1
             processed_ranges.append((match.start(), match.end()))
         
@@ -99,8 +99,17 @@ class HalsteadParser:
 
     def _extract_individual_operators(self, code, processed_ranges):
         """Извлекает отдельные операторы, исключая уже обработанные составные конструкции"""
+        # Создаем список всех обработанных позиций
+        all_processed_positions = set()
+        for start, end in processed_ranges:
+            for pos in range(start, end):
+                all_processed_positions.add(pos)
+        
         # Сначала обрабатываем составные операторы (длинные идут первыми)
         composite_operators = [
+            (r'===', '==='),
+            (r'!==', '!=='),
+            (r'<=>', '<=>'),
             (r'\+\+', '++'),
             (r'--', '--'),
             (r'\*\*', '**'),
@@ -110,9 +119,6 @@ class HalsteadParser:
             (r'/=', '/='),
             (r'%=', '%='),
             (r'\.=', '.='),
-            (r'===', '==='),
-            (r'!==', '!=='),
-            (r'<=>', '<=>'),
             (r'&&', '&&'),
             (r'\|\|', '||'),
             (r'<<', '<<'),
@@ -120,6 +126,7 @@ class HalsteadParser:
             (r'->', '->'),
             (r'::', '::'),
             (r'\?\?', '??'),
+            (r'=>', '=>'),
             (r'<=', '<='),
             (r'>=', '>='),
             (r'==', '=='),
@@ -132,13 +139,16 @@ class HalsteadParser:
             for match in re.finditer(pattern, code, re.IGNORECASE):
                 # Проверяем, не попадает ли этот оператор в уже обработанный диапазон
                 is_processed = False
-                for start, end in processed_ranges:
-                    if start <= match.start() < end:
+                for pos in range(match.start(), match.end()):
+                    if pos in all_processed_positions:
                         is_processed = True
                         break
                 
                 if not is_processed:
                     self.operators_dict[operator] = self.operators_dict.get(operator, 0) + 1
+                    # Добавляем позиции этого оператора в обработанные
+                    for pos in range(match.start(), match.end()):
+                        all_processed_positions.add(pos)
         
         # Теперь обрабатываем простые операторы, исключая те, что уже обработаны как составные
         simple_operators = [
@@ -193,8 +203,8 @@ class HalsteadParser:
             for match in re.finditer(pattern, code, re.IGNORECASE):
                 # Проверяем, не попадает ли этот оператор в уже обработанный диапазон
                 is_processed = False
-                for start, end in processed_ranges:
-                    if start <= match.start() < end:
+                for pos in range(match.start(), match.end()):
+                    if pos in all_processed_positions:
                         is_processed = True
                         break
                 

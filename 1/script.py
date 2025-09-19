@@ -62,90 +62,205 @@ class HalsteadParser:
             'fetch_assoc', 'getUserById', 'getMessage', 'getUsersByRole', 'addUser'
         ]
 
-        # Сначала обрабатываем составные операторы
+        # Обрабатываем составные операторы и отдельные операторы
         self._extract_composite_operators(code_no_strings)
-        
-        # Затем простые операторы (исключаем составные)
-        operator_patterns = [
-            r'\+\+', r'--', r'\*\*', r'\+=', r'-=', r'\*=', r'/=', r'%=', r'\.=',
-            r'===', r'!==', r'<=>', r'&&', r'\|\|', r'<<', r'>>', r'->', r'::', r'\?\?',
-            r'<=', r'>=', r'==', r'!=', r'<>',
-            r'while\s*\(', r'do\b',
-            r'for\s*\(', r'foreach\s*\(', r'break\b', r'continue\b',
-            r'function\b', r'return\b', r'class\b', r'interface\b', r'trait\b',
-            r'throw\b',
-            r'echo\b', r'print\b', r'isset\s*\(', r'empty\s*\(', r'unset\s*\(',
-            r'\+', r'-', r'\*', r'/', r'%', r'=', r'<', r'>',
-            r'&', r'\|', r'\^', r'~', r'!', r'\.', r'\?', r':', r'@',
-            r'\(', r'\)', r'\[', r'\]', r'\{', r'\}', r',', r';'
-        ]
 
-        for pattern in operator_patterns:
-            matches = re.findall(pattern, code_no_strings, re.IGNORECASE)
-            for match in matches:
-                operator = match.lower() if match.strip().isalpha() else match
-                self.operators_dict[operator] = self.operators_dict.get(operator, 0) + 1
-
-        # Считаем только закрытые пары скобок как один оператор
-        # Одиночные скобки считаем отдельно
-        open_parens = code_no_strings.count('(')
-        close_parens = code_no_strings.count(')')
-        open_braces = code_no_strings.count('{')
-        close_braces = code_no_strings.count('}')
-        open_brackets = code_no_strings.count('[')
-        close_brackets = code_no_strings.count(']')
-        
-        # Закрытые пары
-        pairs = min(open_parens, close_parens)
-        if pairs > 0:
-            self.operators_dict['()'] = self.operators_dict.get('()', 0) + pairs
-        
-        pairs = min(open_braces, close_braces)
-        if pairs > 0:
-            self.operators_dict['{}'] = self.operators_dict.get('{}', 0) + pairs
-            
-        pairs = min(open_brackets, close_brackets)
-        if pairs > 0:
-            self.operators_dict['[]'] = self.operators_dict.get('[]', 0) + pairs
-        
-        # Одиночные скобки (не закрытые)
-        if open_parens > close_parens:
-            self.operators_dict['('] = self.operators_dict.get('(', 0) + (open_parens - close_parens)
-        if close_parens > open_parens:
-            self.operators_dict[')'] = self.operators_dict.get(')', 0) + (close_parens - open_parens)
-            
-        if open_braces > close_braces:
-            self.operators_dict['{'] = self.operators_dict.get('{', 0) + (open_braces - close_braces)
-        if close_braces > open_braces:
-            self.operators_dict['}'] = self.operators_dict.get('}', 0) + (close_braces - open_braces)
-            
-        if open_brackets > close_brackets:
-            self.operators_dict['['] = self.operators_dict.get('[', 0) + (open_brackets - close_brackets)
-        if close_brackets > open_brackets:
-            self.operators_dict[']'] = self.operators_dict.get(']', 0) + (close_brackets - open_brackets)
+        # Обрабатываем скобки как составные конструкции
+        self._extract_bracket_constructs(code_no_strings)
 
         self.eta1 = len(self.operators_dict)
         self.N1 = sum(self.operators_dict.values())
 
     def _extract_composite_operators(self, code):
         """Извлекает составные операторы как единые конструкции"""
+        # Сначала считаем составные конструкции и помечаем их как обработанные
+        processed_ranges = []
+        
         # if-elseif-else конструкции
         if_else_pattern = r'if\s*\([^)]*\)\s*\{[^{}]*(?:\{[^{}]*\}[^{}]*)*\}(?:\s*elseif\s*\([^)]*\)\s*\{[^{}]*(?:\{[^{}]*\}[^{}]*)*\})*(?:\s*else\s*\{[^{}]*(?:\{[^{}]*\}[^{}]*)*\})?'
-        if_else_matches = re.findall(if_else_pattern, code, re.IGNORECASE | re.DOTALL)
-        for match in if_else_matches:
+        for match in re.finditer(if_else_pattern, code, re.IGNORECASE | re.DOTALL):
             self.operators_dict['if-else'] = self.operators_dict.get('if-else', 0) + 1
+            processed_ranges.append((match.start(), match.end()))
         
         # try-catch-finally конструкции
         try_catch_pattern = r'try\s*\{[^{}]*(?:\{[^{}]*\}[^{}]*)*\}(?:\s*catch\s*\([^)]*\)\s*\{[^{}]*(?:\{[^{}]*\}[^{}]*)*\})*(?:\s*finally\s*\{[^{}]*(?:\{[^{}]*\}[^{}]*)*\})?'
-        try_catch_matches = re.findall(try_catch_pattern, code, re.IGNORECASE | re.DOTALL)
-        for match in try_catch_matches:
+        for match in re.finditer(try_catch_pattern, code, re.IGNORECASE | re.DOTALL):
             self.operators_dict['try-catch'] = self.operators_dict.get('try-catch', 0) + 1
+            processed_ranges.append((match.start(), match.end()))
         
         # switch-case-default конструкции
         switch_case_pattern = r'switch\s*\([^)]*\)\s*\{[^{}]*(?:\{[^{}]*\}[^{}]*)*\}'
-        switch_case_matches = re.findall(switch_case_pattern, code, re.IGNORECASE | re.DOTALL)
-        for match in switch_case_matches:
+        for match in re.finditer(switch_case_pattern, code, re.IGNORECASE | re.DOTALL):
             self.operators_dict['switch-case'] = self.operators_dict.get('switch-case', 0) + 1
+            processed_ranges.append((match.start(), match.end()))
+        
+        # Теперь считаем отдельные операторы, исключая уже обработанные диапазоны
+        self._extract_individual_operators(code, processed_ranges)
+
+    def _extract_individual_operators(self, code, processed_ranges):
+        """Извлекает отдельные операторы, исключая уже обработанные составные конструкции"""
+        # Сначала обрабатываем составные операторы (длинные идут первыми)
+        composite_operators = [
+            (r'\+\+', '++'),
+            (r'--', '--'),
+            (r'\*\*', '**'),
+            (r'\+=', '+='),
+            (r'-=', '-='),
+            (r'\*=', '*='),
+            (r'/=', '/='),
+            (r'%=', '%='),
+            (r'\.=', '.='),
+            (r'===', '==='),
+            (r'!==', '!=='),
+            (r'<=>', '<=>'),
+            (r'&&', '&&'),
+            (r'\|\|', '||'),
+            (r'<<', '<<'),
+            (r'>>', '>>'),
+            (r'->', '->'),
+            (r'::', '::'),
+            (r'\?\?', '??'),
+            (r'<=', '<='),
+            (r'>=', '>='),
+            (r'==', '=='),
+            (r'!=', '!='),
+            (r'<>', '<>'),
+        ]
+        
+        # Обрабатываем составные операторы
+        for pattern, operator in composite_operators:
+            for match in re.finditer(pattern, code, re.IGNORECASE):
+                # Проверяем, не попадает ли этот оператор в уже обработанный диапазон
+                is_processed = False
+                for start, end in processed_ranges:
+                    if start <= match.start() < end:
+                        is_processed = True
+                        break
+                
+                if not is_processed:
+                    self.operators_dict[operator] = self.operators_dict.get(operator, 0) + 1
+        
+        # Теперь обрабатываем простые операторы, исключая те, что уже обработаны как составные
+        simple_operators = [
+            (r'if\s*\(', 'if'),
+            (r'elseif\s*\(', 'elseif'),
+            (r'else\b', 'else'),
+            (r'switch\s*\(', 'switch'),
+            (r'case\b', 'case'),
+            (r'default\b', 'default'),
+            (r'while\s*\(', 'while'),
+            (r'do\b', 'do'),
+            (r'for\s*\(', 'for'),
+            (r'foreach\s*\(', 'foreach'),
+            (r'break\b', 'break'),
+            (r'continue\b', 'continue'),
+            (r'function\b', 'function'),
+            (r'return\b', 'return'),
+            (r'class\b', 'class'),
+            (r'interface\b', 'interface'),
+            (r'trait\b', 'trait'),
+            (r'try\b', 'try'),
+            (r'catch\s*\(', 'catch'),
+            (r'finally\b', 'finally'),
+            (r'throw\b', 'throw'),
+            (r'echo\b', 'echo'),
+            (r'print\b', 'print'),
+            (r'isset\s*\(', 'isset'),
+            (r'empty\s*\(', 'empty'),
+            (r'unset\s*\(', 'unset'),
+            (r'\+', '+'),
+            (r'-', '-'),
+            (r'\*', '*'),
+            (r'/', '/'),
+            (r'%', '%'),
+            (r'=', '='),
+            (r'<', '<'),
+            (r'>', '>'),
+            (r'&', '&'),
+            (r'\|', '|'),
+            (r'\^', '^'),
+            (r'~', '~'),
+            (r'!', '!'),
+            (r'\.', '.'),
+            (r'\?', '?'),
+            (r':', ':'),
+            (r'@', '@'),
+            (r',', ','),
+            (r';', ';')
+        ]
+
+        for pattern, operator in simple_operators:
+            for match in re.finditer(pattern, code, re.IGNORECASE):
+                # Проверяем, не попадает ли этот оператор в уже обработанный диапазон
+                is_processed = False
+                for start, end in processed_ranges:
+                    if start <= match.start() < end:
+                        is_processed = True
+                        break
+                
+                if not is_processed:
+                    self.operators_dict[operator] = self.operators_dict.get(operator, 0) + 1
+
+    def _extract_bracket_constructs(self, code):
+        """Извлекает скобочные конструкции как единые операторы"""
+        # Сначала считаем все скобки по отдельности
+        open_parens = code.count('(')
+        close_parens = code.count(')')
+        open_braces = code.count('{')
+        close_braces = code.count('}')
+        open_brackets = code.count('[')
+        close_brackets = code.count(']')
+        
+        # Круглые скобки ()
+        if open_parens == close_parens:
+            # Количество совпадает - все пары
+            if open_parens > 0:
+                self.operators_dict['()'] = self.operators_dict.get('()', 0) + open_parens
+        else:
+            # Количество различается - максимальное количество пар + одиночные
+            pairs = min(open_parens, close_parens)
+            if pairs > 0:
+                self.operators_dict['()'] = self.operators_dict.get('()', 0) + pairs
+            
+            # Одиночные скобки
+            if open_parens > close_parens:
+                self.operators_dict['('] = self.operators_dict.get('(', 0) + (open_parens - close_parens)
+            if close_parens > open_parens:
+                self.operators_dict[')'] = self.operators_dict.get(')', 0) + (close_parens - open_parens)
+        
+        # Фигурные скобки {}
+        if open_braces == close_braces:
+            # Количество совпадает - все пары
+            if open_braces > 0:
+                self.operators_dict['{}'] = self.operators_dict.get('{}', 0) + open_braces
+        else:
+            # Количество различается - максимальное количество пар + одиночные
+            pairs = min(open_braces, close_braces)
+            if pairs > 0:
+                self.operators_dict['{}'] = self.operators_dict.get('{}', 0) + pairs
+            
+            # Одиночные скобки
+            if open_braces > close_braces:
+                self.operators_dict['{'] = self.operators_dict.get('{', 0) + (open_braces - close_braces)
+            if close_braces > open_braces:
+                self.operators_dict['}'] = self.operators_dict.get('}', 0) + (close_braces - open_braces)
+        
+        # Квадратные скобки []
+        if open_brackets == close_brackets:
+            # Количество совпадает - все пары
+            if open_brackets > 0:
+                self.operators_dict['[]'] = self.operators_dict.get('[]', 0) + open_brackets
+        else:
+            # Количество различается - максимальное количество пар + одиночные
+            pairs = min(open_brackets, close_brackets)
+            if pairs > 0:
+                self.operators_dict['[]'] = self.operators_dict.get('[]', 0) + pairs
+            
+            # Одиночные скобки
+            if open_brackets > close_brackets:
+                self.operators_dict['['] = self.operators_dict.get('[', 0) + (open_brackets - close_brackets)
+            if close_brackets > open_brackets:
+                self.operators_dict[']'] = self.operators_dict.get(']', 0) + (close_brackets - open_brackets)
 
     def _extract_operands(self, code):
         code = self._remove_comments(code)
@@ -188,12 +303,18 @@ class HalsteadParser:
             'enum', 'readonly', 'never', 'mixed', 'union', 'intersection', 'true', 'false', 'null'
         }
         
-        # Находим все идентификаторы (имена функций, классов, методов) как операторы
-        identifiers = re.findall(r'\b[a-zA-Z_][a-zA-Z0-9_]*\b', code_no_strings)
-        for identifier in identifiers:
-            # Пропускаем зарезервированные слова PHP
-            if identifier.lower() not in php_keywords:
-                self.operators_dict[identifier] = self.operators_dict.get(identifier, 0) + 1
+        # Находим только имена функций, классов, методов как операторы
+        # Ищем вызовы функций: function_name( или function_name->method(
+        function_calls = re.findall(r'\b([a-zA-Z_][a-zA-Z0-9_]*)\s*\(', code_no_strings)
+        for func_name in function_calls:
+            if func_name.lower() not in php_keywords:
+                self.operators_dict[func_name] = self.operators_dict.get(func_name, 0) + 1
+        
+        # Ищем имена классов: new ClassName или ClassName::
+        class_names = re.findall(r'\bnew\s+([a-zA-Z_][a-zA-Z0-9_]*)\b', code_no_strings)
+        for class_name in class_names:
+            if class_name.lower() not in php_keywords:
+                self.operators_dict[class_name] = self.operators_dict.get(class_name, 0) + 1
 
         self.eta2 = len(self.operands_dict)
         self.N2 = sum(self.operands_dict.values())

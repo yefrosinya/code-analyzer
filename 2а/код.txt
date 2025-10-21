@@ -1,0 +1,56 @@
+<?php
+$x = 0;
+$y = 0;
+
+echo $x . "\n";
+while ($x == 0) {
+    while ($x == 1) {
+        while ($x == 2) {
+            while ($x == 3) {
+                while ($x == 4) {
+                    if ($x == 0) {
+                        $y = 0;
+                        switch ($y) {
+                            case 0:
+                                echo "zero\n";
+                                break;
+                            case 1:
+                                echo "one\n";
+                                break;
+                            case 2:
+                                echo "two\n";
+                                break;
+                            default:
+                                echo "other\n";
+                                break;
+                        }
+                    } elseif ($x == 1) {
+                        $y = 1;
+                    } elseif ($x == 2) {
+                        $y = 2;
+                    } elseif ($x == 3) {
+                        $y = 3;
+                    } else {
+                        $y = 4;
+                    }
+                }
+            }
+        }
+    }
+}
+echo $y . "\n";
+
+while ($y == 0) {
+    switch ($y) {
+        case 0:
+            echo "final: zero\n";
+            break;
+        case 1:
+            echo "final: one\n";
+            break;
+        case 2:
+            echo "final: two\n";
+            break;
+    }
+    break; 
+}

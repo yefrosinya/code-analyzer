@@ -1,0 +1,61 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Code Analyzer</title>
+    <link href="https://stackpath.bootstrapcdn.com/bootstrap/4.5.2/css/bootstrap.min.css" rel="stylesheet">
+    <style>
+        textarea { width: 100%; height: 200px; }
+        .label { margin-top: 10px; }
+    </style>
+</head>
+<body>
+    <div class="container mt-5">
+        <h1 class="text-center">Code Analyzer</h1>
+        <textarea id="sourceCode" class="form-control" placeholder="Paste your code here..."></textarea>
+        <br>
+        <input type="file" id="fileInput" class="form-control-file" accept=".txt,.c,.cpp,.java,.py,.pl" />
+        <button id="loadButton" class="btn btn-primary mt-2">Загрузить код</button>
+        <button id="analyzeButton" class="btn btn-success mt-2">Анализировать код</button>
+        <button id="clearButton" class="btn btn-danger mt-2">Очистить</button>
+        
+        <div class="mt-4">
+            <h5>Результаты анализа:</h5>
+            <table class="table table-bordered">
+                <tr>
+                    <th>Абсолютная сложность программы</th>
+                    <td id="countIF">0</td>
+                </tr>
+                <tr>
+                    <th>Количество операторов</th>
+                    <td id="countAllOperators">0</td>
+                </tr>
+                <tr>
+                    <th>Максимальный уровень вложенности</th>
+                    <td id="maxNesting">0</td>
+                </tr>
+                <tr>
+                    <th>Относительная сложность</th>
+                    <td id="attitude">0</td>
+                </tr>
+            </table>
+            <h5>Количество операторов:</h5>
+            <table class="table table-bordered" id="operatorCountsTable">
+                <thead>
+                    <tr>
+                        <th>Оператор</th>
+                        <th>Количество</th>
+                    </tr>
+                </thead>
+                <tbody id="operatorCountsBody"></tbody>
+            </table>
+        </div>
+    </div>
+
+    <script src="https://code.jquery.com/jquery-3.5.1.slim.min.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/@popperjs/core@2.9.2/dist/umd/popper.min.js"></script>
+    <script src="https://stackpath.bootstrapcdn.com/bootstrap/4.5.2/js/bootstrap.min.js"></script>
+    <script src="script.js"></script>
+</body>
+</html>
